@@ -1,93 +1,206 @@
-<?php
-// 连接本地SQLite数据库 文件名为lyb.db
-$db = new PDO('sqlite:lyb.db');
-// 设置数据库编码
-$db->exec("PRAGMA encoding='UTF-8'");
-
-// 自动创建留言数据表 不存在则新建
-$createSql = "CREATE TABLE IF NOT EXISTS liuyan(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL,
-    content TEXT NOT NULL,
-    addtime TEXT NOT NULL
-)";
-$db->exec($createSql);
-
-// 接收提交留言数据
-if($_POST){
-    $name = trim($_POST['name']);
-    $msg = trim($_POST['msg']);
-    $time = date('Y-m-d H:i:s');
-    if(!empty($name) && !empty($msg)){
-        // 插入留言语句
-        $ins = $db->prepare("INSERT INTO liuyan(username,content,addtime) VALUES(?,?,?)");
-        $ins->execute([$name,$msg,$time]);
-        header('Location:index.php');
-        exit;
-    }
-}
-
-// 查询所有留言 倒序最新在前
-$list = $db->query("SELECT * FROM liuyan ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
-?>
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<!-- 手机端适配标签 -->
-<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
-<title>手机留言板</title>
-<style>
-/* 全局样式 手机居中美化 */
-*{margin:0;padding:0;box-sizing:border-box;font-family:"微软雅黑",sans-serif;}
-body{background:#f5f7fa;padding:15px;}
-/* 主容器居中 限制手机宽度 */
-.main{max-width:500px;margin:0 auto;background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 10px #eee;}
-h2{text-align:center;color:#333;margin-bottom:20px;font-size:18px;}
-/* 输入框样式 */
-.inp{width:100%;padding:12px;border:1px solid #ddd;border-radius:8px;margin-bottom:12px;font-size:15px;}
-textarea{height:100px;resize:none;}
-/* 提交按钮渐变美化 */
-.btn{width:100%;padding:12px;background:linear-gradient(135deg,#409eff,#67c23a);color:#fff;border:none;border-radius:8px;font-size:16px;}
-/* 留言列表样式 */
-.liuy_list{margin-top:25px;}
-.item{padding:15px;border-bottom:1px solid #f0f0f0;margin-bottom:10px;border-radius:8px;background:#fafafa;}
-.name{color:#409eff;font-weight:bold;margin-bottom:5px;}
-.time{font-size:12px;color:#999;margin:5px 0;}
-.content{color:#555;line-height:1.6;}
-/* 后台入口 */
-.admin_in{text-align:center;margin-top:15px;}
-.admin_in a{color:#e64340;text-decoration:none;}
-</style>
+    <meta charset="UTF-8">
+    <!-- 强制手机居中适配 禁止缩放 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>手机端留言板</title>
+    <!-- 引入数据库内核 -->
+    <script src="https://cdn.jsdelivr.net/npm/sqlite3-wasm@0.8.0/dist/sqlite3.min.js"></script>
+    <style>
+        /* 全局通用样式 全中文注释 */
+        *{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "微软雅黑", sans-serif;
+        }
+        /* 页面背景渐变 */
+        body{
+            background: linear-gradient(145deg,#e6f0ff,#f0f6ff);
+            padding: 15px;
+        }
+        /* 主容器 手机居中核心样式 */
+        .main-container{
+            max-width: 520px;
+            width: 100%;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 22px;
+            box-shadow: 0 3px 16px #c9d8f0;
+        }
+        /* 标题样式 */
+        .title{
+            text-align: center;
+            color: #2563eb;
+            font-size: 22px;
+            margin-bottom: 20px;
+        }
+        /* 输入框统一样式 */
+        .input-item{
+            margin-bottom: 16px;
+        }
+        .input-item input,
+        .input-item textarea{
+            width: 100%;
+            padding: 13px 15px;
+            border: 1px solid #dbeafe;
+            border-radius: 12px;
+            font-size: 15px;
+            outline: none;
+            background: #f8fbff;
+        }
+        /* 留言文本域高度 */
+        .input-item textarea{
+            height: 110px;
+            resize: none;
+        }
+        /* 渐变提交按钮 */
+        .submit-btn{
+            width: 100%;
+            padding: 13px;
+            background: linear-gradient(90deg,#2563eb,#3b82f6);
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+        }
+        .submit-btn:active{
+            opacity: 0.9;
+        }
+        /* 留言列表区域 */
+        .ly-list{
+            margin-top: 25px;
+        }
+        .ly-title{
+            font-size: 17px;
+            color: #444;
+            margin-bottom: 12px;
+        }
+        /* 单条留言卡片 */
+        .ly-card{
+            padding: 15px;
+            background: #f5f9ff;
+            border-radius: 12px;
+            margin-bottom: 12px;
+        }
+        .ly-name{
+            color: #2563eb;
+            font-weight: bold;
+            font-size: 15px;
+        }
+        .ly-time{
+            font-size: 12px;
+            color: #888;
+            margin: 6px 0;
+        }
+        .ly-text{
+            color: #333;
+            line-height: 1.6;
+        }
+        /* 后台入口居中 */
+        .admin-entry{
+            text-align: center;
+            margin-top: 20px;
+        }
+        .admin-entry a{
+            color: #2563eb;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        /* 空留言提示 */
+        .empty-tip{
+            text-align: center;
+            color: #999;
+            padding: 20px 0;
+        }
+    </style>
 </head>
 <body>
-<div class="main">
-    <h2>在线留言板</h2>
-    <!-- 留言提交表单 -->
-    <form method="post">
-        <input class="inp" type="text" name="name" placeholder="请输入你的昵称" required>
-        <textarea class="inp" name="msg" placeholder="请输入留言内容" required></textarea>
-        <button class="btn" type="submit">提交留言</button>
-    </form>
+    <div class="main-container">
+        <h2 class="title">在线留言板</h2>
+        <!-- 留言提交表单 -->
+        <div class="input-item">
+            <input type="text" id="nickname" placeholder="请输入你的昵称">
+        </div>
+        <div class="input-item">
+            <textarea id="content" placeholder="写下你的留言内容"></textarea>
+        </div>
+        <button class="submit-btn" onclick="addLiuyan()">提交留言</button>
 
-    <!-- 留言展示区域 -->
-    <div class="liuy_list">
-        <?php if(empty($list)){ ?>
-        <p style="text-align:center;color:#999;padding:20px;">暂无留言，快来抢沙发吧~</p>
-        <?php }else{ ?>
-            <?php foreach($list as $v){ ?>
-            <div class="item">
-                <div class="name">昵称：<?php echo $v['username'] ?></div>
-                <div class="time">时间：<?php echo $v['addtime'] ?></div>
-                <div class="content"><?php echo $v['content'] ?></div>
+        <!-- 留言展示列表 -->
+        <div class="ly-list">
+            <div class="ly-title">最新留言</div>
+            <div id="lyBox"></div>
+        </div>
+
+        <!-- 跳转后台入口 -->
+        <div class="admin-entry">
+            <a href="admin.html">进入后台管理</a>
+        </div>
+    </div>
+
+<script>
+// 声明全局数据库对象
+let db;
+
+// 页面加载初始化数据库
+window.onload = async function(){
+    const sqlite = await sqlite3InitModule();
+    const opfsDB = sqlite.OpfsDb;
+    // 读取本地 lyb.db 数据库
+    db = new opfsDB("lyb.db");
+    // 加载所有公开留言
+    showLiuyan();
+}
+
+// 添加留言函数 全中文注释
+function addLiuyan(){
+    // 获取输入框内容
+    let name = document.getElementById("nickname").value.trim();
+    let text = document.getElementById("content").value.trim();
+    // 判断非空
+    if(name == "" || text == ""){
+        alert("昵称和留言内容不能为空！");
+        return;
+    }
+    // 获取当前时间
+    let nowTime = new Date().toLocaleString();
+    // 执行插入SQL语句
+    let insertSql = `INSERT INTO liuyan(nickname,content,add_time,is_show) VALUES('${name}','${text}','${nowTime}',1)`;
+    db.exec(insertSql);
+    alert("留言提交成功！");
+    // 清空输入框
+    document.getElementById("nickname").value = "";
+    document.getElementById("content").value = "";
+    // 刷新留言列表
+    showLiuyan();
+}
+
+// 展示公开留言函数
+function showLiuyan(){
+    let html = "";
+    // 查询状态为1 正常显示的留言
+    let res = db.exec("SELECT * FROM liuyan WHERE is_show=1 ORDER BY id DESC");
+    // 判断是否有留言
+    if(res[0].values.length == 0){
+        html = '<div class="empty-tip">暂无留言，快来发表第一条吧</div>';
+    }else{
+        // 循环拼接留言卡片
+        res[0].values.forEach(item=>{
+            html += `
+            <div class="ly-card">
+                <div class="ly-name">${item[1]}</div>
+                <div class="ly-time">${item[3]}</div>
+                <div class="ly-text">${item[2]}</div>
             </div>
-            <?php } ?>
-        <?php } ?>
-    </div>
-
-    <div class="admin_in">
-        <a href="admin.php">进入后台管理</a>
-    </div>
-</div>
+            `;
+        })
+    }
+    // 渲染页面
+    document.getElementById("lyBox").innerHTML = html;
+}
+</script>
 </body>
 </html>
