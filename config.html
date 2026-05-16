@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <!-- 手机端适配标签 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>留言板数据库配置</title>
+    <script src="https://cdn.jsdelivr.net/npm/sqlite3-wasm@0.8.0/dist/sqlite3.min.js"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f5f7fa;}
+        .box{text-align:center;padding:30px;background:#fff;border-radius:15px;box-shadow:0 4px 15px #e0e6f0;}
+        h3{color:#2563eb;margin-bottom:15px;}
+        p{color:#666;}
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h3>本地数据库初始化</h3>
+        <p id="tip">正在自动创建 lyb.db 数据库...</p>
+    </div>
+
+<script>
+// 全局数据库对象 供前后台页面调用
+let db = null;
+
+// 初始化本地SQLite数据库 生成lyb.db文件
+async function initDB(){
+    // 加载数据库内核
+    const sqlite3 = await sqlite3InitModule();
+    const opfs = sqlite3.OpfsDb;
+    // 指定数据库文件名 lyb.db
+    db = new opfs("lyb.db");
+
+    // 创建留言数据表 不存在自动新建
+    const createSql = `
+    CREATE TABLE IF NOT EXISTS liuyan(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nickname TEXT NOT NULL,
+        content TEXT NOT NULL,
+        add_time TEXT NOT NULL,
+        is_show INTEGER DEFAULT 1
+    )
+    `;
+    db.exec(createSql);
+    document.getElementById("tip").innerText = "✅ lyb.db 数据库创建成功！可关闭此页";
+}
+
+// 页面加载自动执行初始化
+window.onload = initDB;
+</script>
+</body>
+</html>
